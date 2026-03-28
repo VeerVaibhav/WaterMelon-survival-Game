@@ -16,7 +16,6 @@ export class BootScene extends Phaser.Scene {
     this.load.image('hp_fill', 'assets/ui/HP_Fill.png');
     this.load.image('panel_bg', 'assets/ui/PanelBackground.png');
     this.load.image('inner_panel_bg', 'assets/ui/InnerPanelBackground.png');
-    this.load.image('leaderboard_bg', 'assets/ui/leaderboard.png');
 
     // Load World Assets
     this.load.image('bg_stars', 'assets/world/Background_0.png');

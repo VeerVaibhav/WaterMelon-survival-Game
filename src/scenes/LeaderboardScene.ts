@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ScoreSystem } from '../systems/ScoreSystem';
+import { GameButton } from '../ui/Buttons';
 import { formatNumber } from '../utils/helpers';
 
 interface LeaderboardData {
@@ -11,8 +12,8 @@ export class LeaderboardScene extends Phaser.Scene {
   constructor() { super({ key: 'LeaderboardScene' }); }
 
   create(data: LeaderboardData): void {
-    const W = this.scale.width;   // 1280
-    const H = this.scale.height;  // 720
+    const W = this.scale.width;
+    const H = this.scale.height;
 
     this.cameras.main.setBackgroundColor('#070712');
     this.cameras.main.fadeIn(400, 0, 0, 0);
@@ -20,188 +21,103 @@ export class LeaderboardScene extends Phaser.Scene {
     // Stars BG
     this.add.tileSprite(W / 2, H / 2, W, H, 'bg_stars').setAlpha(0.5);
 
-    // --- Remove white background from leaderboard image at runtime ---
-    this.removeWhiteBackground('leaderboard_bg', 'leaderboard_clean');
+    // Title
+    this.add.text(W / 2, 35, '🏆 Leaderboard', {
+      fontSize: '34px', color: '#ffd700', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5);
 
-    // --- Leaderboard background image (1024x1024 source) ---
-    const displayH = H * 0.92;
-    const scale = displayH / 1024;
-    const displayW = 1024 * scale;
-
-    const board = this.add.image(W / 2, H / 2, 'leaderboard_clean');
-    board.setScale(scale);
-
-    // Board bounds in screen coords
-    const boardLeft = W / 2 - displayW / 2;
-    const boardTop = H / 2 - displayH / 2;
-
-    const toScreenX = (imgX: number) => boardLeft + imgX * scale;
-    const toScreenY = (imgY: number) => boardTop + imgY * scale;
-
-    // --- Row positions (measured from the 1024x1024 source image) ---
-    // 7 yellow bars, centers estimated from image analysis
-    const firstRowY = 310;
-    const rowSpacing = 63;
-    const barLeftX = 280;
-    const barRightX = 760;
+    this.add.text(W / 2, 73, 'Top 10 Survivors', {
+      fontSize: '16px', color: '#888888',
+    }).setOrigin(0.5);
 
     const scoreSystem = new ScoreSystem();
     const entries = scoreSystem.getLeaderboard();
 
-    // --- Render entries on the 7 bars ---
+    // Header row
+    const headerY = 105;
+    const panelBg = this.add.graphics();
+    panelBg.fillStyle(0x0d1a2e, 0.85);
+    panelBg.fillRoundedRect(W / 2 - 300, headerY - 5, 600, 390, 10);
+    panelBg.lineStyle(1, 0x334477, 0.6);
+    panelBg.strokeRoundedRect(W / 2 - 300, headerY - 5, 600, 390, 10);
+
+    ['#', 'Name', 'Score', 'Date'].forEach((h, i) => {
+      const xs = [W / 2 - 280, W / 2 - 230, W / 2 + 120, W / 2 + 230];
+      this.add.text(xs[i], headerY + 5, h, {
+        fontSize: '13px', color: '#5577aa', fontStyle: 'bold',
+      });
+    });
+
+    // Divider
+    const div = this.add.graphics();
+    div.lineStyle(1, 0x334477, 0.5);
+    div.lineBetween(W / 2 - 290, headerY + 28, W / 2 + 290, headerY + 28);
+
+    // Entries
     if (entries.length === 0) {
-      this.add.text(W / 2, H / 2 + 10, 'No scores yet.\nBe the first!', {
-        fontSize: '16px', color: '#5c4a2a', fontStyle: 'bold',
-        align: 'center',
+      this.add.text(W / 2, headerY + 160, 'No scores yet. Be the first!', {
+        fontSize: '16px', color: '#555577',
       }).setOrigin(0.5);
     } else {
-      entries.slice(0, 7).forEach((entry, i) => {
-        const rowCenterY = toScreenY(firstRowY + i * rowSpacing);
+      entries.slice(0, 10).forEach((entry, i) => {
+        const rowY = headerY + 38 + i * 34;
         const isPlayer = entry.nickname === data.nickname && entry.score === data.currentScore;
+        const isCurrent = data.currentScore !== undefined && entry.score === data.currentScore;
+        const rowColor = i === 0 ? '#ffd700' : i === 1 ? '#cccccc' : i === 2 ? '#cd7f32' : (isPlayer ? '#44ff88' : '#8899aa');
 
-        const rowColor = i === 0 ? '#7a1a00' : i === 1 ? '#5c3a0a' : i === 2 ? '#5c3a0a' : '#4a3a1a';
+        // Highlight row
+        if (isCurrent || isPlayer) {
+          const rowBg = this.add.graphics();
+          rowBg.fillStyle(0x1a3a1a, 0.6);
+          rowBg.fillRoundedRect(W / 2 - 295, rowY - 4, 590, 26, 4);
+          rowBg.setAlpha(0);
+          this.tweens.add({ targets: rowBg, alpha: 1, delay: i * 80 + 200, duration: 300 });
+        }
 
-        // Player name on the left side of bar
-        const nameText = entry.nickname.slice(0, 14);
-        const nameT = this.add.text(toScreenX(barLeftX + 8), rowCenterY, nameText, {
-          fontSize: '12px', color: rowColor, fontStyle: i < 3 ? 'bold' : 'normal',
-        }).setOrigin(0, 0.5).setAlpha(0);
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+        const cols = [
+          { x: W / 2 - 280, text: medal },
+          { x: W / 2 - 230, text: entry.nickname.slice(0, 18) },
+          { x: W / 2 + 120, text: formatNumber(entry.score) },
+          { x: W / 2 + 230, text: entry.date },
+        ];
 
-        // Score on the right side of bar
-        const scoreT = this.add.text(toScreenX(barRightX - 8), rowCenterY, formatNumber(entry.score), {
-          fontSize: '12px', color: rowColor, fontStyle: i < 3 ? 'bold' : 'normal',
-        }).setOrigin(1, 0.5).setAlpha(0);
+        cols.forEach(col => {
+          const t = this.add.text(col.x, rowY, col.text, {
+            fontSize: '14px', color: rowColor,
+            fontStyle: i < 3 ? 'bold' : 'normal',
+          }).setAlpha(0);
+          this.tweens.add({ targets: t, alpha: 1, delay: i * 80, duration: 250 });
+        });
 
-        // Animate in
-        this.tweens.add({ targets: [nameT, scoreT], alpha: 1, delay: i * 80, duration: 250 });
-
-        // Highlight current player's row
-        if (isPlayer) {
-          const glowX = toScreenX((barLeftX + barRightX) / 2);
-          const glowW = (barRightX - barLeftX) * scale;
-          const highlight = this.add.graphics();
-          highlight.fillStyle(0xffffff, 0.2);
-          highlight.fillRoundedRect(glowX - glowW / 2, rowCenterY - 12, glowW, 24, 3);
-          this.tweens.add({
-            targets: highlight, alpha: 0.1,
-            duration: 600, yoyo: true, repeat: -1,
-          });
+        // Profile link small indicator
+        if (entry.profileLink) {
+          this.add.text(W / 2 + 275, rowY, '🔗', { fontSize: '11px' }).setAlpha(0.6);
         }
       });
     }
 
-    // --- Interactive buttons overlaying the image's BACK and NEXT button areas ---
-    // The previous Y calculation (approx 66%) was too high, placing them over rows 6 and 7.
-    // The buttons in the image are very close to the bottom. Based on visual inspection, 
-    // they are roughly at ~84% to 85% of the total height.
-    const backBtnX = toScreenX(395);
-    const backBtnY = toScreenY(755);
-    const startBtnX = toScreenX(630);
-    const startBtnY = toScreenY(755);
-    
-    // Adjust button size to cover the red areas
-    const btnW = 160 * scale; 
-    const btnH = 45 * scale;
-
-    // -- BACK BUTTON --
-    const backCover = this.add.graphics();
-    backCover.fillStyle(0xd52121, 1);
-    backCover.fillRoundedRect(backBtnX - btnW / 2, backBtnY - btnH / 2, btnW, btnH, 4);
-    backCover.setDepth(board.depth + 1);
-
-    const backLabel = this.add.text(backBtnX, backBtnY, 'BACK', {
-      fontSize: `${Math.round(20 * scale)}px`, color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(board.depth + 2);
-
-    const backZone = this.add.zone(backBtnX, backBtnY, btnW, btnH)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(board.depth + 3);
-
-    backZone.on('pointerover', () => {
-      backCover.clear();
-      backCover.fillStyle(0xff4444, 1);
-      backCover.fillRoundedRect(backBtnX - btnW / 2, backBtnY - btnH / 2, btnW, btnH, 4);
-      backLabel.setScale(1.1);
-    });
-    backZone.on('pointerout', () => {
-      backCover.clear();
-      backCover.fillStyle(0xd52121, 1);
-      backCover.fillRoundedRect(backBtnX - btnW / 2, backBtnY - btnH / 2, btnW, btnH, 4);
-      backLabel.setScale(1);
-    });
-    backZone.on('pointerdown', () => {
-      backLabel.setScale(0.95);
-      this.time.delayedCall(100, () => {
-        this.cameras.main.fadeOut(300);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-          this.scene.start('MenuScene');
-        });
+    // Buttons
+    new GameButton(this, {
+      x: W / 2 - 210, y: H - 75, width: 195, height: 44,
+      text: '🔄 Play Again',
+      fillColor: 0x1b6b2a,
+    }, () => {
+      this.cameras.main.fadeOut(300);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('MenuScene');
       });
     });
 
-    // -- START SURVIVING BUTTON --
-    // We cover the 'NEXT' text entirely.
-    const startCover = this.add.graphics();
-    startCover.fillStyle(0xd52121, 1);
-    startCover.fillRoundedRect(startBtnX - btnW / 2, startBtnY - btnH / 2, btnW, btnH, 4);
-    startCover.setDepth(board.depth + 1);
-
-    const startLabel = this.add.text(startBtnX, startBtnY, 'START SURVIVING', {
-      fontSize: `${Math.round(12 * scale)}px`, color: '#ffffff', fontStyle: 'bold',
-      stroke: '#000000', strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(board.depth + 2);
-
-    const startZone = this.add.zone(startBtnX, startBtnY, btnW, btnH)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(board.depth + 3);
-
-    startZone.on('pointerover', () => {
-      startCover.clear();
-      startCover.fillStyle(0xff4444, 1);
-      startCover.fillRoundedRect(startBtnX - btnW / 2, startBtnY - btnH / 2, btnW, btnH, 4);
-      startLabel.setScale(1.1);
+    new GameButton(this, {
+      x: W / 2 + 15, y: H - 75, width: 195, height: 44,
+      text: '🗑 Clear Scores',
+      fillColor: 0x5a1010,
+    }, () => {
+      localStorage.removeItem('wms_leaderboard');
+      this.cameras.main.fadeOut(200);
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart());
     });
-    startZone.on('pointerout', () => {
-      startCover.clear();
-      startCover.fillStyle(0xd52121, 1);
-      startCover.fillRoundedRect(startBtnX - btnW / 2, startBtnY - btnH / 2, btnW, btnH, 4);
-      startLabel.setScale(1);
-    });
-    startZone.on('pointerdown', () => {
-      startLabel.setScale(0.95);
-      this.time.delayedCall(100, () => {
-        this.cameras.main.fadeOut(300);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-          this.scene.start('MenuScene');
-        });
-      });
-    });
-  }
-
-  /** Remove white/near-white pixels from a texture and create a new clean texture */
-  private removeWhiteBackground(sourceKey: string, targetKey: string): void {
-    const source = this.textures.get(sourceKey);
-    const img = source.getSourceImage() as HTMLImageElement;
-    
-    const canvas = this.textures.createCanvas(targetKey, img.width, img.height);
-    if (!canvas) return;
-    
-    const ctx = canvas.context;
-    ctx.drawImage(img, 0, 0);
-    
-    const imageData = ctx.getImageData(0, 0, img.width, img.height);
-    const data = imageData.data;
-    
-    const threshold = 235;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i], g = data[i + 1], b = data[i + 2];
-      if (r > threshold && g > threshold && b > threshold) {
-        data[i + 3] = 0; // Make transparent
-      }
-    }
-    
-    ctx.putImageData(imageData, 0, 0);
-    canvas.refresh();
   }
 }
